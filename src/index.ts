@@ -50,15 +50,23 @@ app.put('/tasks/:id', async (req: Request, res: Response) => {
       .where(eq(TasksTable.id, updatedTask.id))
       .returning()
     if (createdTask) {
-      res.status(201).send(createdTask)
+      res.status(200).send(createdTask)
     } else {
       res.status(400).send({ message: 'Task Not Found' })
     }
   }
 })
 
-app.delete('/tasks/:id', (req: Request, res: Response) => {
-  res.status(200).send('')
+app.delete('/tasks/:id', async (req: Request, res: Response) => {
+  const idObject = id_schema.safeParse(req.params.id)
+
+  if (idObject.success) {
+    const { data: id } = idObject
+    await db.delete(TasksTable).where(eq(TasksTable.id, id))
+    res.status(200).send()
+  } else {
+    res.status(400).send({ message: fromZodError(idObject.error).message })
+  }
 })
 
 app.listen(port, () => {
