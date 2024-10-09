@@ -12,3 +12,6 @@ export const task_schema = new_task_schema.extend({
   id: id_schema,
   createdDate: z.string().datetime(),
 })
+
+export const string_boolean_schema = z.enum(['true', 'false'])
+export const sort_by_schema = z.optional(z.enum(['+createdDate', '-createdDate', '+dueDate', '-dueDate']))

@@ -1,10 +1,10 @@
 import express, { Express, Request, Response } from 'express'
 import dotenv from 'dotenv'
-import { id_schema, new_task_schema, task_schema } from './types/zod'
+import { id_schema, new_task_schema, sort_by_schema, string_boolean_schema, task_schema } from './types/zod'
 import { TasksTable } from './db/schema'
 import { db } from './db/db'
 import { fromZodError } from 'zod-validation-error'
-import { eq } from 'drizzle-orm'
+import { asc, desc, eq } from 'drizzle-orm'
 
 dotenv.config()
 
@@ -13,12 +13,69 @@ const port = process.env.PORT || 3000
 
 app.use(express.json())
 
-app.get('/tasks', (req: Request, res: Response) => {
-  res.status(200).send({})
+app.get('/tasks', async (req: Request, res: Response) => {
+  const { completed: completedString, sort_by: sortByString } = req.query
+  const stringBooleanObject = string_boolean_schema.safeParse(String(completedString).toLowerCase())
+  const sortByObject = sort_by_schema.safeParse(sortByString)
+
+  if (stringBooleanObject.success !== true) {
+    res.status(400).send({ message: fromZodError(stringBooleanObject.error).message })
+  } else if (sortByObject.success !== true) {
+    res.status(400).send({ message: fromZodError(sortByObject.error).message })
+  } else {
+    const sortBy = sortByObject.data
+    const completed = String(stringBooleanObject.data).toLowerCase() === 'true'
+    if (sortBy) {
+      if (sortBy === '+createdDate') {
+        const tasks = await db
+          .select()
+          .from(TasksTable)
+          .where(eq(TasksTable.completed, completed))
+          .orderBy(asc(TasksTable.createdDate))
+        res.status(200).send(tasks)
+      } else if (sortBy === '-createdDate') {
+        const tasks = await db
+          .select()
+          .from(TasksTable)
+          .where(eq(TasksTable.completed, completed))
+          .orderBy(desc(TasksTable.createdDate))
+        res.status(200).send(tasks)
+      } else if (sortBy === '+dueDate') {
+        const tasks = await db
+          .select()
+          .from(TasksTable)
+          .where(eq(TasksTable.completed, completed))
+          .orderBy(asc(TasksTable.dueDate))
+        res.status(200).send(tasks)
+      } else if (sortBy === '-dueDate') {
+        const tasks = await db
+          .select()
+          .from(TasksTable)
+          .where(eq(TasksTable.completed, completed))
+          .orderBy(desc(TasksTable.dueDate))
+        res.status(200).send(tasks)
+      }
+    } else {
+      const tasks = await db.select().from(TasksTable).where(eq(TasksTable.completed, completed))
+      res.status(200).send(tasks)
+    }
+  }
 })
 
-app.get('/tasks/:id', (req: Request, res: Response) => {
-  res.status(200).send('')
+app.get('/tasks/:id', async (req: Request, res: Response) => {
+  const idObject = id_schema.safeParse(req.params.id)
+
+  if (idObject.success) {
+    const { data: id } = idObject
+    const [task] = await db.select().from(TasksTable).where(eq(TasksTable.id, id))
+    if (task) {
+      res.status(200).send(task)
+    } else {
+      res.status(400).send({ message: 'Task Not Found' })
+    }
+  } else {
+    res.status(400).send({ message: fromZodError(idObject.error).message })
+  }
 })
 
 app.post('/tasks', async (req: Request, res: Response) => {
